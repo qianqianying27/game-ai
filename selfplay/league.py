@@ -35,6 +35,8 @@ class SelfPlayLeague:
         steps = 0
         info: Dict[str, object] = {}
         last_loss = float("nan")
+        # 记录 learner 最后一次写进 replay buffer 的 transition 字典,便于终局归因
+        last_learner_transition: Optional[Dict[str, Any]] = None
 
         while True:
             player = env.current_player
@@ -54,16 +56,16 @@ class SelfPlayLeague:
             if is_learner and training:
                 mask = np.zeros(env.action_dim, dtype=np.float32)
                 mask[legal] = 1.0
-                self.agent.observe(
-                    {
-                        "obs": obs_before,
-                        "action": action,
-                        "reward": reward,
-                        "next_obs": next_obs,
-                        "terminated": terminated,
-                        "mask": mask,
-                    }
-                )
+                transition = {
+                    "obs": obs_before,
+                    "action": action,
+                    "reward": reward,
+                    "next_obs": next_obs,
+                    "terminated": terminated,
+                    "mask": mask,
+                }
+                self.agent.observe(transition)
+                last_learner_transition = transition
                 upd = self.agent.update()
                 if upd:
                     last_loss = upd["loss"]
@@ -74,6 +76,16 @@ class SelfPlayLeague:
                 break
 
         winner = info.get("winner") or 0
+        # 终局归因:如果 learner 输了,把最后一条 learner transition 的 reward 从 0 改成 -1,
+        # 直接给"导致对手获胜的那一步"明确惩罚信号,避免仅靠 bootstrapping 弱监督
+        if (
+            last_learner_transition is not None
+            and winner != 0
+            and winner != learner
+            and not last_learner_transition["terminated"]
+        ):
+            last_learner_transition["reward"] = -1.0
+
         return {"winner": float(winner), "learner": float(learner), "steps": float(steps), "loss": last_loss}
 
     def train(self, episodes: int, snapshot_every: int = 200, log_every: int = 100, metrics=None) -> Dict[str, float]:

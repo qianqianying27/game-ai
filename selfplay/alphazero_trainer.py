@@ -90,11 +90,13 @@ class AlphaZeroTrainer:
         logits, value = self.net(obs)
         logpi = torch.log_softmax(logits, dim=-1)
         policy_loss = -(pol * logpi).sum(1).mean()
-        value_loss = torch.nn.functional.mse_loss(value, z)
+        # value 裁剪到 [-1,1],与 tanh 输出范围对齐,防止 value 爆炸影响策略头
+        value_loss = torch.nn.functional.mse_loss(value.clamp(-1, 1), z)
         loss = policy_loss + value_loss
 
         self.opt.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.net.parameters(), 5.0)
         self.opt.step()
         return {
             "policy_loss": float(policy_loss.item()),

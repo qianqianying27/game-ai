@@ -46,14 +46,25 @@ class ConnectFour(Env):
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         action = int(action)
-        if self.terminated or action < 0 or action >= self.width or not self._can_drop(action):
-            # 非法动作: 给予惩罚并结束,便于训练时约束策略
+        if self.terminated:
+            # 对局已结束: 不再改变胜负方, 只返回惩罚
             return (
                 self.observe(self.current_player),
                 -1.0,
                 True,
                 False,
-                {"invalid": True, "winner": 3 - self.current_player},
+                {"invalid": True, "winner": self.winner},
+            )
+        if action < 0 or action >= self.width or not self._can_drop(action):
+            # 非法动作: 判负并结束,便于训练时约束策略
+            self.terminated = True
+            self.winner = 3 - self.current_player
+            return (
+                self.observe(self.current_player),
+                -1.0,
+                True,
+                False,
+                {"invalid": True, "winner": self.winner},
             )
 
         mover = self.current_player

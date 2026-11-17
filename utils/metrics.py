@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import math
 import os
 from typing import Dict, List, Optional
 
@@ -10,7 +11,7 @@ _SPARK = "▁▂▃▅▆▇█"
 
 def sparkline(values: List[float], width: int = 48) -> str:
     """把一串数值渲染成一行 ASCII 折线图(零依赖可视化)。"""
-    vals = [v for v in values if v is not None]
+    vals = [v for v in values if v is not None and not math.isnan(v)]
     if not vals:
         return ""
     if len(vals) > width:  # 等间隔降采样
@@ -68,7 +69,7 @@ class MetricsLogger:
         return self.path
 
     def series(self, key: str) -> List[float]:
-        return [r[key] for r in self.rows if key in r]
+        return [r[key] for r in self.rows if key in r and not math.isnan(r[key])]
 
     def print_summary(self, keys: Optional[List[str]] = None) -> None:
         """在终端打印每个指标的 ASCII 趋势与首尾值。"""

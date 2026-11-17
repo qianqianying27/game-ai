@@ -121,7 +121,12 @@ class DQNAgent(Agent):
 
         q = self.qnet(obs).gather(1, acts)
         with torch.no_grad():
-            next_q = self.target(next_obs).max(1, keepdim=True).values
+            next_q = self.target(next_obs)  # (B, A)
+            # 训练时也必须对非法动作 mask,保证自举与推理行为一致
+            if "mask" in batch and batch["mask"] is not None:
+                mask_t = torch.as_tensor(batch["mask"], device=self.device).bool()
+                next_q = next_q.masked_fill(~mask_t, -math.inf)
+            next_q = next_q.max(1, keepdim=True).values
             boot = -next_q if self.zero_sum else next_q
             target = rew + self.gamma * boot * (1.0 - done)
 
